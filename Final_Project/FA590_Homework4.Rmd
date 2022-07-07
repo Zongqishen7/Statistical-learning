@@ -1,0 +1,261 @@
+---
+output: pdf_document
+---
+# Stevens Institute of Technology
+# FA590.  Assignment #4.
+# This content is protected and may not be shared, uploaded, or distributed
+
+
+## Enter Your Name Here, or "Anonymous" if you want to remain anonymous..
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name:Zongqi Shen
+
+CWID:10479206
+
+Date:04/20/2022
+
+# Instructions
+
+
+When you have completed the assignment, knit the document into a PDF file, and upload _both_ the .pdf and .Rmd files to Canvas.
+
+Note that you must have LaTeX installed in order to knit the equations below.  If you do not have it installed, simply delete the questions below.
+```{r}
+CWID = 10479206 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproducible nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)
+```
+# Question 1:
+In this assignment, you will be required to find a set of data to run regression on.  This data set should be financial in nature, and of a type that will work with the models we have discussed this semester (hint: we didn't look at time series)  You may not use any of the data sets in the ISLR package that we have been looking at all semester.  Your data set that you choose should have both qualitative and quantitative variables. (or has variables that you can transform)
+
+Provide a description of the data below, where you obtained it, what the variable names are and what it is describing.
+
+$Description$:
+I obtained this data from Kaggle, the time column is Number of seconds elapsed between this transaction and the first transaction in the dataset, columne v1-v10 may be result of a PCA Dimensionality reduction to protect user identities and sensitive features(v1-v10), Amount :Transaction amount, class: 1 for fraudulent transactions, 0 otherwise
+
+
+
+# Question 2:
+Pick a quantitative variable and fit at least four different models in order to predict that variable using the other predictors.  Determine which of the models is the best fit.  You will need to provide strong reasons as to why the particular model you chose is the best one.  You will need to confirm the model you have selected provides the best fit and that you have obtained the best version of that particular model (i.e. subset selection or validation for example).  You need to convince the grader that you have chosen the best model.
+
+$Data Summary$
+```{r}
+library(gdata)
+creditcard <- read.csv("creditcard.csv")
+creditcard <- creditcard[, -c(1,2)]
+creditcard <- na.omit(creditcard)
+summary(creditcard$Amount)
+hist(creditcard$Class)
+```
+
+$Pick best variables$
+```{r warning=FALSE}
+library(leaps)
+Q2_data <- creditcard[, -12]
+regfit_full <- regsubsets(Amount~., Q2_data)
+reg_sum <- summary(regfit_full)
+names(reg_sum)
+par(mfrow = c(2,2))
+plot(reg_sum$rss, xlab = "number of Variables", tlab = "RSS", type = "l")
+plot(reg_sum$adjr2, xlab = "number of Variables", tlab = "adjr2", type = "l")
+which.max(reg_sum$adjr2)
+points(8, reg_sum$adjr2[8], col = "red", cex = 2, pch = 20)
+#pick v1-v8 variables
+reg_sum$which
+Q2_data <- Q2_data[, -c(9,10)]
+```
+
+$Model 1: simple linear Regression$
+```{r}
+train <- sample(nrow(Q2_data),nrow(Q2_data)*0.7)
+Q2_train_set <- Q2_data[train,]
+Q2_test_set <- Q2_data[-train,]
+Model1 <- lm(Amount~., data = Q2_train_set)
+Model1_predicted <- predict(Model1, newdata = Q2_test_set)
+mean((Model1_predicted - Q2_test_set$Amount)^2)
+```
+$Model 2 Poly regression$
+```{r}
+library(boot)
+set.seed(10086)
+cv.error_M2 <- rep(0,5)
+#It takes too long time to run so I just record it here, poly3 is the lowest cv.error
+
+#for (i in 1:5){
+#  Model_2 <- glm(Amount~poly(V1,i)+poly(V2,i)+poly(V3,i)+poly(V4,i)+poly(V5,i)+poly(V6,i)+poly(V7,i)+poly(V8,i), data = Q2_train_set)
+#  cv.error_M2[i] = cv.glm(Q2_train_set,Model_2)$delta[1]
+#}
+
+#cv.error_M2 : 12078.25    14623.62    10056.64  2739210.78 38486977.03
+Model2 <- glm(Amount~poly(V1,3)+poly(V2,3)+poly(V3,3)+poly(V4,3)+poly(V5,3)+poly(V6,3)+poly(V7,3)+poly(V8,3), data = Q2_train_set)
+Model2_predicted <- predict(Model2, newdata = Q2_test_set)
+mean((Model2_predicted - Q2_test_set$Amount)^2)
+```
+Obviously, Model 2 has the lowest mean squared error compared to model1.
+
+$Model 3 Tree$
+```{r}
+library(tree)
+library(ISLR)
+summary(Q2_data$Amount)
+Model3 <- tree(Amount~., Q2_train_set)
+summary(Model3)
+plot(Model3)
+text(Model3, pretty = 0)
+Model3_predict <- predict(Model3, Q2_test_set)
+mean((Model3_predict - Q2_test_set$Amount)^2)
+```
+Not a good model
+
+$Model4:K-Means$
+```{r}
+set.seed(2)
+library(e1071)
+Model4 <- svm(Amount~., data=Q2_train_set, kernel="linear", cost=10, scale = FALSE)
+plot(Model4, Q2_train_set)
+Model4$index
+set.seed(1)
+Model4_turn <- tune(svm, Amount~. ,data = Q2_train_set, kernel="linear", ranges = list(cost=c(0.001, 0.1, 0.1, 1, 5, 10, 100)))
+summary(Model4_turn)
+#when cost = 100 Model4 has lowest error
+bestmodel <- Model4_turn$best.model
+summary(bestmodel)
+Model4_predict <- predict(bestmodel, Q2_test_set)
+mean((Model4_predict - Q2_test_set$Amount)^2)
+
+```
+$Overall the best model is the second model$
+
+
+#Question 3:
+Do the same approach as in question 2, but this time for a qualitative variable.
+
+$Model1-Logistic regression$
+```{r warning=FALSE}
+Q3_data <- creditcard[, -11]
+Q3_train_set <- Q3_data[train, ]
+Q3_test_set <- Q3_data[-train, ]
+glm.fit <- glm(Class~., data = Q3_train_set, family = binomial)
+summary(glm.fit)
+#Pick 5 most important variables
+glm.fit <- glm(Class~V1+V3+V4+V6+V10, data = Q3_train_set, family = binomial)
+glm.predicted <- predict(glm.fit, Q3_test_set, type = "response")
+glm.predicted <- ifelse(glm.predicted>0.5, 1,0)
+table(glm.predicted, Q3_test_set$Class)
+mean(glm.predicted == Q3_test_set$Class)
+```
+It is a very good model
+
+$Model2-LDA$
+```{r}
+library(MASS)
+lda.fit <- lda(Class~., data = Q3_train_set)
+lda.fit
+plot(lda.fit)
+lda.predict <- predict(lda.fit, Q3_test_set)
+table(lda.predict$class, Q3_test_set$Class)
+mean(lda.predict$class==Q3_test_set$Class)
+```
+$Model3-QDA$
+```{r}
+qda.fit <- qda(Class~., data = Q3_train_set)
+qda.fit
+qda.class <- predict(qda.fit, Q3_test_set)$class
+table(qda.class, Q3_test_set$Class)
+mean(qda.class == Q3_test_set$Class)
+```
+$Model4-Knn$
+```{r}
+library(class)
+set.seed(1)
+knn.pred <- knn(Q3_train_set, Q3_test_set,Q3_train_set$Class)
+mean(Q3_test_set$Class==knn.pred)
+
+```
+The best model is Knn
+
+#Question 4:
+
+In this problem, you will use support vector approaches in order to
+predict the direction of your ETFs in your data set from homework 2.  
+
+##(a)
+Create two different data frames, one for each ETF.  Each data frame should include the log returns of your assets as well as a binary classifier for the direction of each ETF. 
+```{r}
+FA590_hw2dataset <- read.csv("~/Documents/Stevens_second_semester/FA590/Homework/Homework2/FA590_hw2dataset.csv")
+IWS <- FA590_hw2dataset[, -12]
+
+n <- nrow(IWS)
+iws_return <- log(IWS$IWS.Adjusted[-1] / IWS$IWS.Adjusted[-n])
+iws_return <- c(NA, iws_return)
+IWS <- cbind(IWS, iws_return)
+IWS$binary <- ifelse(IWS$iws_retur>0, 1, 0)
+head(IWS)
+IWS <- na.omit(IWS)
+
+IWN <- FA590_hw2dataset[, -11]
+n <- nrow(IWN)
+iwn_return <- log(IWN$IWN.Adjusted[-1] / IWN$IWN.Adjusted[-n])
+iwn_return <- c(NA, iwn_return)
+IWN <- cbind(IWN, iwn_return)
+
+IWN$binary <- ifelse(IWN$iwn_return>0, 1, 0)
+head(IWN)
+IWN <- na.omit(IWN)
+```
+
+
+
+##(b)
+Fit a support vector classifier to the data using linear kernels.  You should use the tune function to determine an optimal cost for each SVM.  What do you see in these results?  Is one ETF more accurately predicted over the other?
+```{r}
+library(e1071)
+svmfit <- svm(IWS$binary~., data = IWS[,-c(11,12)], kernel="linear", cost=10 )
+summary(svmfit)
+plot(svmfit, IWS)
+tunr.out <- tune(svm, binary~., data = IWS[,-c(11,12)], kernel="linear", ranges = list(cost=c(0.1,1,10,100,1000), gamma=c(0.5,1,2,3,4)))
+summary(tunr.out)
+mean((IWS$binary-predict(tunr.out$best.model, newx=IWS$binary))^2)
+
+svmfit2 <- svm(IWN$binary~., data = IWN[,-c(11,12)], kernel="linear", cost=10 )
+summary(svmfit2)
+plot(svmfit2, IWN)
+tunr.out2 <- tune(svm, binary~., data = IWN[,-c(11,12)], kernel="linear", ranges = list(cost=c(0.1,1,10,100,1000), gamma=c(0.5,1,2,3,4)))
+summary(tunr.out)
+mean((IWN$binary-predict(tunr.out$best.model, newx=IWN$binary))^2)
+```
+Yes,the IWN ETF is more accurately predicted over the other
+
+
+##(c)
+Now repeat (b), this time using SVMs with radial and polynomial basis kernels, with different values of gamma and degree and cost. Comment on your results.
+```{r}
+library(e1071)
+svmfit <- svm(IWS$binary~., data = IWS[,-c(11,12)], kernel="radial", cost=10 )
+summary(svmfit)
+plot(svmfit, IWS)
+tunr.out <- tune(svm, binary~., data = IWS[,-c(11,12)], kernel="radial", ranges = list(cost=c(0.1,1,10,100,1000), gamma=c(0.5,1,2,3,4)))
+summary(tunr.out)
+mean((IWS$binary-predict(tunr.out$best.model, newx=IWS$binary))^2)
+
+
+svmfit2 <- svm(IWN$binary~., data = IWN[,-c(11,12)], kernel="radial", cost=10 )
+summary(svmfit2)
+plot(svmfit2, IWN)
+tunr.out2 <- tune(svm, binary~., data = IWN[,-c(11,12)], kernel="radial", ranges = list(cost=c(0.1,1,10,100,1000), gamma=c(0.5,1,2,3,4)))
+summary(tunr.out)
+mean((IWN$binary-predict(tunr.out$best.model, newx=IWN$binary))^2)
+
+
+```
+
